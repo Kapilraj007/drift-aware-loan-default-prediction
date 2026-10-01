@@ -1,0 +1,78 @@
+feature_name,dtype,source_column,null_rate,transformation_applied,leakage_risk_flag
+annual_inc,float64,annual_inc,,"numeric coercion; median impute on training window; emit annual_inc_was_missing",false
+dti,float64,dti,,"numeric coercion; median impute on training window; emit dti_was_missing",false
+revol_util,float64,revol_util,,"strip optional percent sign; numeric coercion; median impute on training window; emit revol_util_was_missing",false
+revol_bal,float64,revol_bal,,"numeric coercion; median impute on training window; emit revol_bal_was_missing",false
+open_acc,float64,open_acc,,"numeric coercion; median impute on training window; emit open_acc_was_missing",false
+total_acc,float64,total_acc,,"numeric coercion; median impute on training window; emit total_acc_was_missing",false
+delinq_2yrs,float64,delinq_2yrs,,"numeric coercion; median impute on training window; emit delinq_2yrs_was_missing",false
+inq_last_6mths,float64,inq_last_6mths,,"numeric coercion; median impute on training window; emit inq_last_6mths_was_missing",false
+loan_amnt,float64,loan_amnt,,"numeric coercion; median impute on training window; emit loan_amnt_was_missing",false
+term,float64,term,,"extract term in months; median impute on training window; emit term_was_missing",false
+int_rate,float64,int_rate,,"strip optional percent sign; numeric coercion; median impute on training window; emit int_rate_was_missing",false
+installment,float64,installment,,"numeric coercion; median impute on training window; emit installment_was_missing",false
+grade,int16,grade,,"target-safe ordinal mapping fit on training window; unknown category sentinel",false
+sub_grade,int16,sub_grade,,"target-safe ordinal mapping fit on training window; unknown category sentinel",false
+purpose__*,uint8,purpose,,"one-hot encode with categories fit on training window and unknown categories ignored",false
+emp_length,float64,emp_length,,"parse employment length to years; median impute on training window; emit emp_length_was_missing",false
+home_ownership__*,uint8,home_ownership,,"one-hot encode with categories fit on training window and unknown categories ignored",false
+loan_to_income,float64,loan_amnt|annual_inc,,"safe divide loan_amnt by positive annual_inc; median impute on training window; emit loan_to_income_was_missing",false
+credit_history_years,float64,earliest_cr_line|issue_d,,"parse dates; year fraction from earliest_cr_line to issue_d; negative values invalid; median impute on training window; emit credit_history_years_was_missing",false
+installment_to_income,float64,installment|annual_inc,,"safe divide installment by positive annual_inc / 12; median impute on training window; emit installment_to_income_was_missing",false
+annual_inc_was_missing,bool,annual_inc,,"1 when raw numeric value is missing or invalid before imputation",false
+dti_was_missing,bool,dti,,"1 when raw numeric value is missing or invalid before imputation",false
+revol_util_was_missing,bool,revol_util,,"1 when raw numeric value is missing or invalid before imputation",false
+revol_bal_was_missing,bool,revol_bal,,"1 when raw numeric value is missing or invalid before imputation",false
+open_acc_was_missing,bool,open_acc,,"1 when raw numeric value is missing or invalid before imputation",false
+total_acc_was_missing,bool,total_acc,,"1 when raw numeric value is missing or invalid before imputation",false
+delinq_2yrs_was_missing,bool,delinq_2yrs,,"1 when raw numeric value is missing or invalid before imputation",false
+inq_last_6mths_was_missing,bool,inq_last_6mths,,"1 when raw numeric value is missing or invalid before imputation",false
+loan_amnt_was_missing,bool,loan_amnt,,"1 when raw numeric value is missing or invalid before imputation",false
+term_was_missing,bool,term,,"1 when term cannot be parsed before imputation",false
+int_rate_was_missing,bool,int_rate,,"1 when raw numeric value is missing or invalid before imputation",false
+installment_was_missing,bool,installment,,"1 when raw numeric value is missing or invalid before imputation",false
+emp_length_was_missing,bool,emp_length,,"1 when employment length cannot be parsed before imputation",false
+loan_to_income_was_missing,bool,loan_amnt|annual_inc,,"1 when ratio is undefined before imputation",false
+credit_history_years_was_missing,bool,earliest_cr_line|issue_d,,"1 when either date is missing or invalid before imputation",false
+installment_to_income_was_missing,bool,installment|annual_inc,,"1 when ratio is undefined before imputation",false
+loan_status,int8,loan_status,,"TARGET_ONLY: map Charged Off or Default to 1 and Fully Paid to 0; exclude and report every other status",true
+issue_d,period[Q],issue_d,,"PARTITION_ONLY: parse issue month; derive issue quarter; never include in model matrix",true
+earliest_cr_line,datetime64[ns],earliest_cr_line,,"DERIVATION_ONLY: used for credit_history_years; raw value excluded from model matrix",true
+recoveries,excluded,recoveries,,"EXCLUDED_POST_ORIGINATION",true
+collection_recovery_fee,excluded,collection_recovery_fee,,"EXCLUDED_POST_ORIGINATION",true
+total_pymnt,excluded,total_pymnt,,"EXCLUDED_POST_ORIGINATION",true
+total_pymnt_inv,excluded,total_pymnt_inv,,"EXCLUDED_POST_ORIGINATION",true
+total_rec_prncp,excluded,total_rec_prncp,,"EXCLUDED_POST_ORIGINATION",true
+total_rec_int,excluded,total_rec_int,,"EXCLUDED_POST_ORIGINATION",true
+total_rec_late_fee,excluded,total_rec_late_fee,,"EXCLUDED_POST_ORIGINATION",true
+last_pymnt_d,excluded,last_pymnt_d,,"EXCLUDED_POST_ORIGINATION",true
+last_pymnt_amnt,excluded,last_pymnt_amnt,,"EXCLUDED_POST_ORIGINATION",true
+next_pymnt_d,excluded,next_pymnt_d,,"EXCLUDED_POST_ORIGINATION",true
+out_prncp,excluded,out_prncp,,"EXCLUDED_POST_ORIGINATION",true
+out_prncp_inv,excluded,out_prncp_inv,,"EXCLUDED_POST_ORIGINATION",true
+last_credit_pull_d,excluded,last_credit_pull_d,,"EXCLUDED_POST_ORIGINATION",true
+last_fico_range_low,excluded,last_fico_range_low,,"EXCLUDED_POST_ORIGINATION",true
+last_fico_range_high,excluded,last_fico_range_high,,"EXCLUDED_POST_ORIGINATION",true
+hardship_flag,excluded,hardship_flag,,"EXCLUDED_POST_ORIGINATION",true
+hardship_status,excluded,hardship_status,,"EXCLUDED_POST_ORIGINATION",true
+debt_settlement_flag,excluded,debt_settlement_flag,,"EXCLUDED_POST_ORIGINATION",true
+settlement_status,excluded,settlement_status,,"EXCLUDED_POST_ORIGINATION",true
+debt_settlement_flag_date,excluded,debt_settlement_flag_date,,"EXCLUDED_POST_ORIGINATION",true
+deferral_term,excluded,deferral_term,,"EXCLUDED_POST_ORIGINATION",true
+hardship_amount,excluded,hardship_amount,,"EXCLUDED_POST_ORIGINATION",true
+hardship_dpd,excluded,hardship_dpd,,"EXCLUDED_POST_ORIGINATION",true
+hardship_end_date,excluded,hardship_end_date,,"EXCLUDED_POST_ORIGINATION",true
+hardship_last_payment_amount,excluded,hardship_last_payment_amount,,"EXCLUDED_POST_ORIGINATION",true
+hardship_length,excluded,hardship_length,,"EXCLUDED_POST_ORIGINATION",true
+hardship_loan_status,excluded,hardship_loan_status,,"EXCLUDED_POST_ORIGINATION",true
+hardship_payoff_balance_amount,excluded,hardship_payoff_balance_amount,,"EXCLUDED_POST_ORIGINATION",true
+hardship_reason,excluded,hardship_reason,,"EXCLUDED_POST_ORIGINATION",true
+hardship_start_date,excluded,hardship_start_date,,"EXCLUDED_POST_ORIGINATION",true
+hardship_type,excluded,hardship_type,,"EXCLUDED_POST_ORIGINATION",true
+orig_projected_additional_accrued_interest,excluded,orig_projected_additional_accrued_interest,,"EXCLUDED_POST_ORIGINATION",true
+payment_plan_start_date,excluded,payment_plan_start_date,,"EXCLUDED_POST_ORIGINATION",true
+pymnt_plan,excluded,pymnt_plan,,"EXCLUDED_POST_ORIGINATION",true
+settlement_amount,excluded,settlement_amount,,"EXCLUDED_POST_ORIGINATION",true
+settlement_date,excluded,settlement_date,,"EXCLUDED_POST_ORIGINATION",true
+settlement_percentage,excluded,settlement_percentage,,"EXCLUDED_POST_ORIGINATION",true
+settlement_term,excluded,settlement_term,,"EXCLUDED_POST_ORIGINATION",true

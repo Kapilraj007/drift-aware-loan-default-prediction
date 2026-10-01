@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+
+# Frontend
+frontend/node_modules/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.tsbuildinfo/
+.npm-cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local Compose secrets
+.env
+.env.*
+!.env.example
+
+# Local data and generated artifacts
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/acquisition_manifest.csv
+data/interim/*
+!data/interim/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/artifacts/*
+!data/artifacts/.gitkeep
+data/*.db
+reports/generated/*
+!reports/generated/.gitkeep
+.tmp/

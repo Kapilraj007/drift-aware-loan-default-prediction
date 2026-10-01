@@ -1,0 +1,12 @@
+{
+  "input_csv": "data/raw/accepted_loans.csv",
+  "feature_store": "data/processed/feature_store",
+  "artifact_directory": "data/artifacts/preprocessor",
+  "chunk_size": 100000,
+  "random_seed": 20260926,
+  "time_split": {
+    "train_fraction": 0.6,
+    "validation_fraction": 0.2,
+    "shift_fraction": 0.2
+  }
+}
