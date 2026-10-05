@@ -108,8 +108,6 @@ export function DriftDashboard({ onStatusChange }: DriftDashboardProps) {
 
   useEffect(() => {
     void refresh();
-    const interval = window.setInterval(() => void refresh(), 30_000);
-    return () => window.clearInterval(interval);
   }, [refresh]);
 
   async function runFeatureCheck(event: FormEvent<HTMLFormElement>) {

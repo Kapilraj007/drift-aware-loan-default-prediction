@@ -1,5 +1,8 @@
 # Sprint 2 completion report
 
+> Historical note: the former container, queue, and cache topology described
+> here was removed in Phase 2; the application now runs locally with hosted Neon.
+
 ## Status
 
 Sprint 2 is complete against the real, frozen LendingClub feature store. The

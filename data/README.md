@@ -9,6 +9,10 @@ Raw and derived datasets are local artifacts and are not committed. The
 repository contains provenance, schemas, code, and tests; it does not grant a
 right to redistribute source records.
 
+All row-level datasets, Parquet feature stores, preprocessors, and model
+artifacts remain on this machine. Hosted Neon contains only application,
+prediction, feedback, monitoring, authorization, and audit records.
+
 ## Dataset and prediction target
 
 The primary dataset is the LendingClub accepted-loan history covering issue

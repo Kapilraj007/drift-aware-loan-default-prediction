@@ -5,11 +5,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ...core.security import UserRole, require_roles
+from ...core.rbac import PermissionCode
+from ...core.security import require_permissions
 from ...db.session import get_session
 from ...models.db_models import MonitoringSnapshot, RetrainingTicket, User
 from ...models.schemas import (
@@ -19,6 +20,7 @@ from ...models.schemas import (
     RetrainingTicketReviewRequest,
     RetrainingTicketStatus,
 )
+from ...services.audit_service import record_audit_event
 
 router = APIRouter(prefix="/retraining-tickets", tags=["retraining"])
 
@@ -53,7 +55,7 @@ def create_retraining_ticket(
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[
         User,
-        Depends(require_roles(UserRole.RISK_ANALYST, UserRole.ADMIN)),
+        Depends(require_permissions(PermissionCode.RETRAINING_CREATE)),
     ],
 ) -> RetrainingTicketResponse:
     """Log a human-confirmed review request without enqueueing any work."""
@@ -87,7 +89,7 @@ def list_retraining_tickets(
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[
         User,
-        Depends(require_roles(UserRole.RISK_ANALYST, UserRole.ADMIN)),
+        Depends(require_permissions(PermissionCode.RETRAINING_READ)),
     ],
     limit: int = 100,
 ) -> list[RetrainingTicketResponse]:
@@ -105,8 +107,12 @@ def list_retraining_tickets(
 def review_retraining_ticket(
     ticket_id: str,
     payload: RetrainingTicketReviewRequest,
+    request: Request,
     session: Annotated[Session, Depends(get_session)],
-    current_user: Annotated[User, Depends(require_roles(UserRole.ADMIN))],
+    current_user: Annotated[
+        User,
+        Depends(require_permissions(PermissionCode.RETRAINING_REVIEW)),
+    ],
 ) -> RetrainingTicketResponse:
     """Record an administrative disposition only; no model work is invoked."""
 
@@ -128,5 +134,14 @@ def review_retraining_ticket(
     ticket.reviewed_by_id = current_user.id
     ticket.review_note = payload.note
     ticket.reviewed_at = datetime.now(UTC)
+    record_audit_event(
+        session,
+        "ticket.reviewed",
+        actor=current_user,
+        entity_type="retraining_ticket",
+        entity_id=ticket.id,
+        metadata={"status": ticket.status},
+        request=request,
+    )
     session.flush()
     return ticket_response(ticket)

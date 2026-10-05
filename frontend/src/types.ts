@@ -1,10 +1,89 @@
-export type UserRole = "loan_officer" | "risk_analyst" | "admin";
+import type { components } from "./api/openapi.generated";
+
+type ApiSchemas = components["schemas"];
+
+export type UserRole = ApiSchemas["UserRole"];
+
+export type Permission =
+  | "application:create"
+  | "application:read_own"
+  | "application:read_all"
+  | "prediction:create"
+  | "prediction:read_own"
+  | "prediction:read_all"
+  | "feedback:create"
+  | "feedback:read_own"
+  | "feedback:read_all"
+  | "experiment:participate"
+  | "experiment:read_results"
+  | "monitoring:read"
+  | "monitoring:run_check"
+  | "retraining:create"
+  | "retraining:read"
+  | "retraining:review"
+  | "model:read"
+  | "dashboard:read"
+  | "user:manage"
+  | "role:read"
+  | "audit:read";
+
+export const ROLE_PERMISSION_FALLBACK: Record<UserRole, readonly Permission[]> = {
+  loan_officer: [
+    "application:create",
+    "application:read_own",
+    "prediction:create",
+    "prediction:read_own",
+    "feedback:create",
+    "feedback:read_own",
+    "experiment:participate",
+    "dashboard:read",
+  ],
+  risk_analyst: [
+    "application:create",
+    "application:read_all",
+    "prediction:create",
+    "prediction:read_all",
+    "feedback:create",
+    "feedback:read_all",
+    "monitoring:read",
+    "monitoring:run_check",
+    "retraining:create",
+    "retraining:read",
+    "model:read",
+    "experiment:read_results",
+    "dashboard:read",
+  ],
+  admin: [
+    "application:create",
+    "application:read_all",
+    "prediction:create",
+    "prediction:read_all",
+    "feedback:create",
+    "feedback:read_all",
+    "monitoring:read",
+    "monitoring:run_check",
+    "retraining:create",
+    "retraining:read",
+    "retraining:review",
+    "model:read",
+    "experiment:read_results",
+    "dashboard:read",
+    "user:manage",
+    "role:read",
+    "audit:read",
+  ],
+};
 
 export interface ApiUser {
   id: string;
   username: string;
   role: UserRole;
+  permissions?: Permission[];
+  email?: string | null;
+  full_name?: string | null;
+  must_change_password?: boolean;
   is_active: boolean;
+  last_login_at?: string | null;
   created_at: string;
 }
 
@@ -14,27 +93,7 @@ export interface TokenResponse {
   expires_in_seconds: number;
 }
 
-export interface LoanApplicationFeatures {
-  annual_inc: number | null;
-  dti: number | null;
-  revol_util: number | string | null;
-  revol_bal: number | null;
-  open_acc: number | null;
-  total_acc: number | null;
-  delinq_2yrs: number | null;
-  inq_last_6mths: number | null;
-  loan_amnt: number | null;
-  term: number | string | null;
-  int_rate: number | string | null;
-  installment: number | null;
-  grade: string | null;
-  sub_grade: string | null;
-  purpose: string | null;
-  emp_length: number | string | null;
-  home_ownership: string | null;
-  earliest_cr_line: string | null;
-  issue_d: string;
-}
+export type LoanApplicationFeatures = ApiSchemas["LoanApplicationFeatures"];
 
 export type ApplicationFeatureName = keyof LoanApplicationFeatures;
 export type ApplicationDraft = Record<ApplicationFeatureName, string>;
@@ -44,6 +103,12 @@ export interface ApplicationResponse {
   external_reference: string | null;
   features: LoanApplicationFeatures;
   created_by_id: string;
+  status?: "scored" | "decided" | "escalated" | string;
+  latest_prediction_id?: string | null;
+  latest_score?: number | null;
+  score?: number | null;
+  risk_flag?: boolean | null;
+  current_decision?: OfficerDecision | null;
   created_at: string;
 }
 
@@ -95,7 +160,7 @@ export interface PredictionResponse {
   created_at: string;
 }
 
-export type OfficerDecision = "approve" | "decline" | "escalate";
+export type OfficerDecision = ApiSchemas["OfficerDecision"];
 
 export interface FeedbackResponse {
   id: string;
@@ -104,11 +169,15 @@ export interface FeedbackResponse {
   decision: OfficerDecision;
   agreed_with_model: boolean | null;
   note: string | null;
+  is_current?: boolean;
+  amendment_number?: number;
+  version?: number;
+  amends_feedback_id?: string | null;
   detector_state: DriftStatus;
   created_at: string;
 }
 
-export type ExplanationVariant = "explanation_shown" | "score_only";
+export type ExplanationVariant = ApiSchemas["ExplanationVariant"];
 
 export interface ExplanationAssignment {
   id: string;
@@ -118,7 +187,7 @@ export interface ExplanationAssignment {
 
 export interface MonitoringSnapshot {
   id: string;
-  source: "prediction" | "feature_drift" | "feedback" | string;
+  source: "score_observation" | "feature_drift";
   snapshot: DriftStatus;
   created_at: string;
 }
@@ -136,117 +205,134 @@ export interface RetrainingTicket {
   reviewed_at: string | null;
 }
 
+export type FieldKind = "number" | "text" | "select" | "month";
+
 export interface ApplicationFieldDefinition {
   name: ApplicationFeatureName;
   label: string;
-  kind: "number" | "text" | "select";
-  group: "Financial profile" | "Loan details" | "Credit history";
-  options?: readonly string[];
+  kind: FieldKind;
+  type?: string;
+  group: "Applicant & finances" | "Financial profile" | "Loan details" | "Credit history" | string;
+  options?: readonly (string | number)[];
+  allowed_values?: readonly (string | number)[];
   required?: boolean;
+  nullable?: boolean;
   placeholder?: string;
   help?: string;
+  help_text?: string;
+  description?: string;
+  format?: string | null;
+  minimum?: number | null;
+  maximum?: number | null;
+}
+
+export interface ApplicationSchemaResponse {
+  fields: ApplicationFieldDefinition[];
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ApplicationReviewResponse {
+  application: ApplicationResponse;
+  latest_prediction: PredictionResponse | null;
+  feedback_history: FeedbackResponse[];
+  current_feedback?: FeedbackResponse | null;
+}
+
+export interface DashboardSummary {
+  applications: number;
+  scored: number;
+  decided: number;
+  pending: number;
+  awaiting_decision?: number;
+  risk_flag_rate: number | null;
+  agreement_rate?: number | null;
+  override_rate: number | null;
+  open_tickets: number;
+  drift_status: DriftStatus | null;
+  latest_drift_status?: DetectorStatus;
+  decision_mix?: Partial<Record<OfficerDecision, number>>;
+  score_distribution?: Array<{ bucket?: string; minimum?: number; maximum?: number; count: number }>;
+  recent_applications?: ApplicationResponse[];
+}
+
+export interface ModelMetadataResponse {
+  model_version: string;
+  feature_view: string;
+  prediction_threshold: number;
+  feature_count: number;
+  feature_schema_sha256: string;
+  synthetic_demo?: boolean;
+  metadata: Record<string, unknown>;
+}
+
+export interface TrainingRunsResponse {
+  runs: Array<Record<string, unknown>>;
+  synthetic_demo?: boolean;
+}
+
+export interface ExperimentArmSummary {
+  variant: ExplanationVariant;
+  exposures: number;
+  decisions: number;
+  agreement_rate: number | null;
+  override_rate: number | null;
+}
+
+export interface ExperimentSummaryResponse {
+  arms: ExperimentArmSummary[];
+  note?: string;
+}
+
+export interface RoleResponse {
+  id: string;
+  name: string;
+  description: string;
+  is_system: boolean;
+  permissions: Permission[];
+}
+
+export interface ManagedUser extends ApiUser {
+  role_id?: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  actor_user_id: string | null;
+  actor_username?: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  metadata?: Record<string, unknown>;
+  ip?: string | null;
+  created_at: string;
 }
 
 export const applicationFields: readonly ApplicationFieldDefinition[] = [
-  {
-    name: "annual_inc",
-    label: "Annual income",
-    kind: "number",
-    group: "Financial profile",
-    placeholder: "75000",
-    help: "Enter annual income before tax, if available.",
-  },
-  {
-    name: "dti",
-    label: "Debt-to-income ratio",
-    kind: "number",
-    group: "Financial profile",
-    placeholder: "16.5",
-    help: "Percentage without the percent sign.",
-  },
-  {
-    name: "revol_util",
-    label: "Revolving utilization",
-    kind: "text",
-    group: "Financial profile",
-    placeholder: "38%",
-  },
-  { name: "revol_bal", label: "Revolving balance", kind: "number", group: "Financial profile" },
+  { name: "annual_inc", label: "Annual income", kind: "number", group: "Applicant & finances", placeholder: "75000", help: "Annual income before tax, in USD." },
+  { name: "dti", label: "Debt-to-income ratio", kind: "number", group: "Applicant & finances", placeholder: "16.5", help: "Percentage without the percent sign." },
+  { name: "revol_util", label: "Revolving utilization", kind: "text", group: "Applicant & finances", placeholder: "38%" },
+  { name: "revol_bal", label: "Revolving balance", kind: "number", group: "Applicant & finances" },
+  { name: "emp_length", label: "Employment length", kind: "select", group: "Applicant & finances", options: ["< 1 year", "1 year", "2 years", "3 years", "4 years", "5 years", "6 years", "7 years", "8 years", "9 years", "10+ years", "n/a"] },
+  { name: "home_ownership", label: "Home ownership", kind: "select", group: "Applicant & finances", options: ["RENT", "MORTGAGE", "OWN", "OTHER", "NONE", "ANY"] },
+  { name: "loan_amnt", label: "Loan amount", kind: "number", group: "Loan details" },
+  { name: "term", label: "Term", kind: "select", group: "Loan details", options: ["36 months", "60 months"] },
+  { name: "int_rate", label: "Interest rate", kind: "text", group: "Loan details", placeholder: "11.2%" },
+  { name: "installment", label: "Monthly installment", kind: "number", group: "Loan details" },
+  { name: "grade", label: "Grade", kind: "select", group: "Loan details", options: ["A", "B", "C", "D", "E", "F", "G"] },
+  { name: "sub_grade", label: "Sub-grade", kind: "text", group: "Loan details", placeholder: "B3" },
+  { name: "purpose", label: "Purpose", kind: "select", group: "Loan details", options: ["debt_consolidation", "credit_card", "home_improvement", "major_purchase", "small_business", "medical", "car", "moving", "vacation", "house", "renewable_energy", "wedding", "other"] },
+  { name: "issue_d", label: "Application month", kind: "month", group: "Loan details", required: true, placeholder: "Jan-2018", help: "Month when this application was created." },
   { name: "open_acc", label: "Open accounts", kind: "number", group: "Credit history" },
   { name: "total_acc", label: "Total accounts", kind: "number", group: "Credit history" },
-  {
-    name: "delinq_2yrs",
-    label: "Delinquencies in last 2 years",
-    kind: "number",
-    group: "Credit history",
-  },
-  {
-    name: "inq_last_6mths",
-    label: "Inquiries in last 6 months",
-    kind: "number",
-    group: "Credit history",
-  },
-  { name: "loan_amnt", label: "Loan amount", kind: "number", group: "Loan details" },
-  {
-    name: "term",
-    label: "Term",
-    kind: "select",
-    group: "Loan details",
-    options: ["36 months", "60 months"],
-  },
-  {
-    name: "int_rate",
-    label: "Interest rate",
-    kind: "text",
-    group: "Loan details",
-    placeholder: "11.2%",
-  },
-  { name: "installment", label: "Monthly installment", kind: "number", group: "Loan details" },
-  {
-    name: "grade",
-    label: "Grade",
-    kind: "select",
-    group: "Loan details",
-    options: ["A", "B", "C", "D", "E", "F", "G"],
-  },
-  {
-    name: "sub_grade",
-    label: "Sub-grade",
-    kind: "text",
-    group: "Loan details",
-    placeholder: "B3",
-  },
-  { name: "purpose", label: "Purpose", kind: "text", group: "Loan details" },
-  {
-    name: "emp_length",
-    label: "Employment length",
-    kind: "text",
-    group: "Financial profile",
-    placeholder: "5 years",
-  },
-  {
-    name: "home_ownership",
-    label: "Home ownership",
-    kind: "select",
-    group: "Financial profile",
-    options: ["RENT", "MORTGAGE", "OWN", "OTHER", "NONE", "ANY"],
-  },
-  {
-    name: "earliest_cr_line",
-    label: "Earliest credit line",
-    kind: "text",
-    group: "Credit history",
-    placeholder: "Jan-2004",
-  },
-  {
-    name: "issue_d",
-    label: "Application month",
-    kind: "text",
-    group: "Loan details",
-    required: true,
-    placeholder: "Jan-2018",
-    help: "Required. Use a month and year, for example Jan-2018.",
-  },
+  { name: "delinq_2yrs", label: "Delinquencies in last 2 years", kind: "number", group: "Credit history" },
+  { name: "inq_last_6mths", label: "Inquiries in last 6 months", kind: "number", group: "Credit history" },
+  { name: "earliest_cr_line", label: "Earliest credit line", kind: "month", group: "Credit history", placeholder: "Jan-2004" },
 ];
 
 export function emptyApplicationDraft(): ApplicationDraft {

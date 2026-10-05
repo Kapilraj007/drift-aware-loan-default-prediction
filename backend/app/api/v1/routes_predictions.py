@@ -1,24 +1,32 @@
-"""Score persisted or one-off applications with an auditable model response."""
+"""Score and query applications with permission-aware explanation masking."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ...core.security import UserRole, get_current_user, require_roles
+from ...core.rbac import PermissionCode
+from ...core.security import has_permission, require_any_permission, require_permissions
 from ...db.session import get_session
-from ...models.db_models import Application, Prediction, User
+from ...models.db_models import Application, Feedback, Prediction, User
 from ...models.schemas import (
     DirectPredictionRequest,
     DriftStatusResponse,
     ExplanationResponse,
     ExplanationVariant,
     MonitoringSnapshotSource,
+    PredictionListResponse,
     PredictionResponse,
 )
-from ...services.inference_service import InferenceService, ModelArtifactError
+from ...services.inference_service import (
+    InferenceService,
+    InputValidationError,
+    ModelArtifactError,
+)
 from ...services.shap_service import ShapService
 from .deps import get_drift_service, get_inference_service, get_shap_service
 from .routes_applications import assert_application_access
@@ -28,15 +36,11 @@ from .routes_monitoring import persist_monitoring_snapshot
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
 
-def _study_variant_for_user(
-    session: Session, current_user: User
-) -> ExplanationVariant | None:
-    if current_user.role != UserRole.LOAN_OFFICER.value:
+def study_variant_for_user(session: Session, current_user: User) -> ExplanationVariant | None:
+    """Return the server-controlled study arm only for eligible participants."""
+
+    if not has_permission(current_user, PermissionCode.EXPERIMENT_PARTICIPATE):
         return None
-    # Create the durable assignment as part of the first score, rather than
-    # relying on the frontend's separate assignment request to win a race.
-    # That ensures a score-only officer never receives SHAP contributors in
-    # their initial prediction response.
     assignment = get_or_create_assignment(session, current_user.id)
     return ExplanationVariant(assignment.variant)
 
@@ -53,6 +57,7 @@ def prediction_response(
     return PredictionResponse(
         id=prediction.id,
         application_id=prediction.application_id,
+        requested_by_id=prediction.requested_by_id,
         model_version=prediction.model_version,
         score=prediction.score,
         threshold=prediction.threshold,
@@ -64,15 +69,26 @@ def prediction_response(
     )
 
 
+def assert_prediction_access(prediction: Prediction, current_user: User) -> None:
+    if has_permission(current_user, PermissionCode.PREDICTION_READ_ALL):
+        return
+    if (
+        not has_permission(current_user, PermissionCode.PREDICTION_READ_OWN)
+        or prediction.requested_by_id != current_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Prediction access is denied",
+        )
+
+
 @router.post("", response_model=PredictionResponse, status_code=status.HTTP_201_CREATED)
 def create_prediction(
     payload: DirectPredictionRequest,
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[
         User,
-        Depends(
-            require_roles(UserRole.LOAN_OFFICER, UserRole.RISK_ANALYST, UserRole.ADMIN)
-        ),
+        Depends(require_permissions(PermissionCode.PREDICTION_CREATE)),
     ],
     inference_service: Annotated[InferenceService, Depends(get_inference_service)],
     shap_service: Annotated[ShapService, Depends(get_shap_service)],
@@ -89,11 +105,16 @@ def create_prediction(
         assert_application_access(application, current_user)
         raw_features = dict(application.raw_features)
     else:
-        assert payload.features is not None  # enforced by the request validator
+        assert payload.features is not None
         raw_features = payload.features.as_raw_dict()
 
     try:
         result = inference_service.predict(raw_features)
+    except InputValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=exc.detail,
+        ) from exc
     except ModelArtifactError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -123,7 +144,81 @@ def create_prediction(
     )
     return prediction_response(
         prediction,
-        study_variant=_study_variant_for_user(session, current_user),
+        study_variant=study_variant_for_user(session, current_user),
+    )
+
+
+@router.get("", response_model=PredictionListResponse)
+def list_predictions(
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[
+        User,
+        Depends(
+            require_any_permission(
+                PermissionCode.PREDICTION_READ_OWN,
+                PermissionCode.PREDICTION_READ_ALL,
+            )
+        ),
+    ],
+    limit: int = 50,
+    offset: int = 0,
+    risk_flag: bool | None = None,
+    decision_status: str | None = None,
+    application_id: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> PredictionListResponse:
+    """Return predictions without ever leaking an officer's withheld explanation."""
+
+    limit = min(max(limit, 1), 200)
+    offset = max(offset, 0)
+    statement = select(Prediction)
+    if not has_permission(current_user, PermissionCode.PREDICTION_READ_ALL):
+        statement = statement.where(Prediction.requested_by_id == current_user.id)
+    if risk_flag is not None:
+        statement = statement.where(Prediction.risk_flag == risk_flag)
+    if application_id is not None:
+        statement = statement.where(Prediction.application_id == application_id)
+    if date_from is not None:
+        statement = statement.where(Prediction.created_at >= date_from)
+    if date_to is not None:
+        statement = statement.where(Prediction.created_at <= date_to)
+    if decision_status:
+        latest_decision = (
+            select(Feedback.decision)
+            .where(Feedback.prediction_id == Prediction.id)
+            .order_by(Feedback.version.desc(), Feedback.created_at.desc())
+            .limit(1)
+            .correlate(Prediction)
+            .scalar_subquery()
+        )
+        normalized = decision_status.strip().lower()
+        if normalized == "pending":
+            statement = statement.where(latest_decision.is_(None))
+        elif normalized == "decided":
+            statement = statement.where(latest_decision.is_not(None))
+        elif normalized in {"approve", "decline", "escalate"}:
+            statement = statement.where(latest_decision == normalized)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="decision_status must be pending, decided, approve, decline, or escalate",
+            )
+
+    total = int(session.scalar(select(func.count()).select_from(statement.subquery())) or 0)
+    predictions = session.scalars(
+        statement.order_by(Prediction.created_at.desc(), Prediction.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    variant = study_variant_for_user(session, current_user)
+    return PredictionListResponse(
+        items=[
+            prediction_response(prediction, study_variant=variant) for prediction in predictions
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -131,18 +226,21 @@ def create_prediction(
 def get_prediction(
     prediction_id: str,
     session: Annotated[Session, Depends(get_session)],
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[
+        User,
+        Depends(
+            require_any_permission(
+                PermissionCode.PREDICTION_READ_OWN,
+                PermissionCode.PREDICTION_READ_ALL,
+            )
+        ),
+    ],
 ) -> PredictionResponse:
     prediction = session.get(Prediction, prediction_id)
     if prediction is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prediction not found")
-    privileged = {UserRole.RISK_ANALYST.value, UserRole.ADMIN.value}
-    if current_user.role not in privileged and prediction.requested_by_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Prediction access is denied",
-        )
+    assert_prediction_access(prediction, current_user)
     return prediction_response(
         prediction,
-        study_variant=_study_variant_for_user(session, current_user),
+        study_variant=study_variant_for_user(session, current_user),
     )

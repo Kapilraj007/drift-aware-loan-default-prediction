@@ -6,18 +6,22 @@ import hashlib
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from ...core.security import UserRole, require_roles
+from ...core.rbac import PermissionCode
+from ...core.security import require_permissions
 from ...db.session import get_session
 from ...models.db_models import (
     ExplanationExperimentAssignment,
     ExplanationExperimentExposure,
+    Feedback,
     Prediction,
     User,
 )
 from ...models.schemas import (
+    ExperimentArmSummary,
+    ExperimentSummaryResponse,
     ExplanationAssignmentResponse,
     ExplanationExposureCreateRequest,
     ExplanationExposureResponse,
@@ -36,9 +40,7 @@ def _variant_for_officer(officer_id: str) -> ExplanationVariant:
     return ExplanationVariant.SCORE_ONLY
 
 
-def get_or_create_assignment(
-    session: Session, officer_id: str
-) -> ExplanationExperimentAssignment:
+def get_or_create_assignment(session: Session, officer_id: str) -> ExplanationExperimentAssignment:
     """Return the immutable assignment for one officer, creating it on first use."""
 
     assignment = session.scalar(
@@ -80,7 +82,10 @@ def exposure_response(exposure: ExplanationExperimentExposure) -> ExplanationExp
 @router.get("/explanation-assignment", response_model=ExplanationAssignmentResponse)
 def explanation_assignment(
     session: Annotated[Session, Depends(get_session)],
-    current_user: Annotated[User, Depends(require_roles(UserRole.LOAN_OFFICER))],
+    current_user: Annotated[
+        User,
+        Depends(require_permissions(PermissionCode.EXPERIMENT_PARTICIPATE)),
+    ],
 ) -> ExplanationAssignmentResponse:
     """Return a durable A/B variant for the authenticated study officer."""
 
@@ -95,7 +100,10 @@ def explanation_assignment(
 def record_explanation_exposure(
     payload: ExplanationExposureCreateRequest,
     session: Annotated[Session, Depends(get_session)],
-    current_user: Annotated[User, Depends(require_roles(UserRole.LOAN_OFFICER))],
+    current_user: Annotated[
+        User,
+        Depends(require_permissions(PermissionCode.EXPERIMENT_PARTICIPATE)),
+    ],
 ) -> ExplanationExposureResponse:
     """Audit a score-review exposure without allowing an officer to choose its arm."""
 
@@ -127,3 +135,68 @@ def record_explanation_exposure(
         session.add(exposure)
         session.flush()
     return exposure_response(exposure)
+
+
+@router.get("/summary", response_model=ExperimentSummaryResponse)
+def experiment_summary(
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[
+        User,
+        Depends(require_permissions(PermissionCode.EXPERIMENT_READ_RESULTS)),
+    ],
+) -> ExperimentSummaryResponse:
+    """Return descriptive per-arm counts without making significance claims."""
+
+    del current_user
+    exposure_counts = dict(
+        session.execute(
+            select(
+                ExplanationExperimentExposure.variant,
+                func.count(ExplanationExperimentExposure.id),
+            ).group_by(ExplanationExperimentExposure.variant)
+        ).all()
+    )
+    latest_feedback_versions = (
+        select(
+            Feedback.prediction_id.label("prediction_id"),
+            func.max(Feedback.version).label("version"),
+        )
+        .group_by(Feedback.prediction_id)
+        .subquery()
+    )
+    decision_rows = session.execute(
+        select(
+            ExplanationExperimentExposure.variant,
+            func.count(Feedback.id),
+            func.sum(case((Feedback.agreed_with_model.is_(True), 1), else_=0)),
+            func.sum(case((Feedback.agreed_with_model.is_(False), 1), else_=0)),
+            func.count(Feedback.agreed_with_model),
+        )
+        .join(
+            Feedback,
+            Feedback.prediction_id == ExplanationExperimentExposure.prediction_id,
+        )
+        .join(
+            latest_feedback_versions,
+            (latest_feedback_versions.c.prediction_id == Feedback.prediction_id)
+            & (latest_feedback_versions.c.version == Feedback.version),
+        )
+        .group_by(ExplanationExperimentExposure.variant)
+    ).all()
+    decisions = {
+        variant: (int(total), int(agreed or 0), int(overridden or 0), int(rated or 0))
+        for variant, total, agreed, overridden, rated in decision_rows
+    }
+    arms: list[ExperimentArmSummary] = []
+    for variant in ExplanationVariant:
+        total, agreed, overridden, rated = decisions.get(variant.value, (0, 0, 0, 0))
+        arms.append(
+            ExperimentArmSummary(
+                variant=variant,
+                exposures=int(exposure_counts.get(variant.value, 0)),
+                decisions=total,
+                agreement_rate=agreed / rated if rated else None,
+                override_rate=overridden / rated if rated else None,
+            )
+        )
+    return ExperimentSummaryResponse(arms=arms)

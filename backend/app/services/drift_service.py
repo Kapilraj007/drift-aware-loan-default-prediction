@@ -114,6 +114,72 @@ class DriftService:
         self._updated_at = datetime.now(UTC)
         return self.snapshot()
 
+    def rehydrate(
+        self,
+        scores: list[float],
+        persisted_snapshot: dict[str, object] | None = None,
+    ) -> DriftSnapshot:
+        """Replay persisted scores into a fresh detector and restore KS state."""
+
+        self._detector = None
+        self._detector_loaded = True
+        try:
+            from river.drift import ADWIN
+        except ImportError:
+            self._detector = None
+        else:
+            self._detector = ADWIN()
+        self._score_stream_count = 0
+        self._latest_score = None
+        self._adwin_change_detected = False
+        self._feature_results = ()
+        self._updated_at = None
+        for score in scores:
+            self.observe_score(float(score))
+
+        if persisted_snapshot:
+            raw_results = persisted_snapshot.get("feature_results", [])
+            if isinstance(raw_results, list):
+                restored: list[FeatureDriftResult] = []
+                for item in raw_results:
+                    if not isinstance(item, dict):
+                        continue
+                    try:
+                        restored.append(
+                            FeatureDriftResult(
+                                feature=str(item["feature"]),
+                                statistic=float(item["statistic"]),
+                                p_value=float(item["p_value"]),
+                                drift_detected=bool(item["drift_detected"]),
+                                reference_count=int(item["reference_count"]),
+                                current_count=int(item["current_count"]),
+                            )
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                self._feature_results = tuple(restored)
+            persisted_count = persisted_snapshot.get("score_stream_count")
+            if isinstance(persisted_count, int):
+                self._score_stream_count = max(self._score_stream_count, persisted_count)
+            if not scores:
+                latest_score = persisted_snapshot.get("latest_score")
+                if isinstance(latest_score, int | float):
+                    self._latest_score = float(latest_score)
+            self._adwin_change_detected = self._adwin_change_detected or bool(
+                persisted_snapshot.get("adwin_change_detected", False)
+            )
+            raw_updated_at = persisted_snapshot.get("updated_at")
+            if isinstance(raw_updated_at, datetime):
+                self._updated_at = raw_updated_at
+            elif isinstance(raw_updated_at, str):
+                try:
+                    self._updated_at = datetime.fromisoformat(
+                        raw_updated_at.replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    pass
+        return self.snapshot()
+
     @staticmethod
     def _common_numeric_columns(reference: pd.DataFrame, current: pd.DataFrame) -> list[str]:
         common = [column for column in reference.columns if column in current.columns]

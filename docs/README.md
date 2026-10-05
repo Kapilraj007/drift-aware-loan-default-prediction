@@ -1,28 +1,33 @@
-# Sprint 1 documentation
+# Documentation index
 
-These documents define the reproducible data boundary for the drift-aware loan
-default project. The primary LendingClub source has now been acquired and
-analyzed locally. The default UCI German Credit benchmark is also acquired and
-verified; its separate adapter remains part of later model evaluation.
+## Showcase operation and governance
 
-- [`data_provenance.md`](data_provenance.md) records verified source facts,
-  licensing caveats, citations, and the acquisition evidence that must be
-  captured locally.
+- [`architecture.md`](architecture.md) maps local browser/API/artifact
+  components to Neon pooled and direct endpoints.
+- [`rbac.md`](rbac.md) records the role-permission matrix and the migration plus
+  seed workflow for catalogue changes.
+- [`full_stack_contract.md`](full_stack_contract.md) maps every UI feature to
+  its API endpoint, permission, and required evidence.
+- [`showcase_walkthrough.md`](showcase_walkthrough.md) is the six-minute,
+  role-by-role presentation script and caveat list.
+- [`verification_report.md`](verification_report.md) is the evidence log. It is
+  the authority for which commands were actually run and which live checks
+  remain unverified.
+- [`audit_baseline.md`](audit_baseline.md) records findings F1-F13 and their
+  planned repair phases.
+
+## Data and research lineage
+
+- [`data_provenance.md`](data_provenance.md) records source facts, licensing
+  caveats, citations, and local acquisition evidence.
 - [`source_registry.csv`](source_registry.csv) is the machine-readable source
-  registry. Its LendingClub and selected UCI rows link to completed
-  acquisitions; blank fields remain only for unselected alternatives.
-- [`data_dictionary.md`](data_dictionary.md) explains the logical feature
-  schema and leakage controls.
-- [`data_dictionary.csv`](data_dictionary.csv) is the machine-readable baseline
-  dictionary with the six Sprint 1 columns.
-- [`sprint1_data_flow.md`](sprint1_data_flow.md) defines the raw-to-Parquet and
-  temporal-split contract used by training, inference, EDA, and drift tests.
-- [`sprint1_completion_report.md`](sprint1_completion_report.md) records the
-  measured real-data results and verification evidence for the completed run.
-- [`sprint1_final_audit.md`](sprint1_final_audit.md) maps every Sprint 1 plan
-  requirement to its implementation and evidence, and separates later-sprint
-  work from the completion decision.
+  registry.
+- [`data_dictionary.md`](data_dictionary.md) and
+  [`data_dictionary.csv`](data_dictionary.csv) define the feature schema and
+  leakage controls.
+- [`sprint1_data_flow.md`](sprint1_data_flow.md) documents the raw-to-Parquet
+  and temporal-split contract used by training, inference, EDA, and drift.
 
-The documentation deliberately separates facts verified from source pages from
-facts established by the local acquisition and real-data run, such as byte
-sizes, row counts, download timestamp, and SHA-256 digests.
+The sprint reports are historical evidence. Where they describe the removed
+container topology, their notes point readers to the current local plus Neon
+workflow in the repository README.

@@ -9,9 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ...core.security import User, UserRole, require_roles
+from ...core.rbac import PermissionCode
+from ...core.security import require_permissions
 from ...db.session import get_session
-from ...models.db_models import MonitoringSnapshot
+from ...models.db_models import MonitoringSnapshot, User
 from ...models.schemas import (
     DriftStatusResponse,
     FeatureDriftRequest,
@@ -62,7 +63,7 @@ def monitoring_history(
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[
         User,
-        Depends(require_roles(UserRole.RISK_ANALYST, UserRole.ADMIN)),
+        Depends(require_permissions(PermissionCode.MONITORING_READ)),
     ],
     limit: int = 100,
 ) -> MonitoringHistoryResponse:
@@ -71,9 +72,7 @@ def monitoring_history(
     del current_user
     safe_limit = min(max(limit, 1), 500)
     records = session.scalars(
-        select(MonitoringSnapshot)
-        .order_by(MonitoringSnapshot.created_at.desc())
-        .limit(safe_limit)
+        select(MonitoringSnapshot).order_by(MonitoringSnapshot.created_at.desc()).limit(safe_limit)
     ).all()
     snapshots = [_history_response(item) for item in reversed(records)]
     return MonitoringHistoryResponse(snapshots=snapshots)
@@ -83,7 +82,7 @@ def monitoring_history(
 def monitoring_status(
     current_user: Annotated[
         User,
-        Depends(require_roles(UserRole.RISK_ANALYST, UserRole.ADMIN)),
+        Depends(require_permissions(PermissionCode.MONITORING_READ)),
     ],
     drift_service: Annotated[object, Depends(get_drift_service)],
 ) -> DriftStatusResponse:
@@ -97,7 +96,7 @@ def feature_drift(
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[
         User,
-        Depends(require_roles(UserRole.RISK_ANALYST, UserRole.ADMIN)),
+        Depends(require_permissions(PermissionCode.MONITORING_RUN_CHECK)),
     ],
     drift_service: Annotated[object, Depends(get_drift_service)],
 ) -> FeatureDriftResponse:

@@ -12,6 +12,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from drift_loan.data.exceptions import FeatureValidationError, SchemaValidationError
 from drift_loan.data.transform import LoanFeatureTransformer, load_transformer, transform_features
 
 from ..core.config import Settings
@@ -19,6 +20,18 @@ from ..core.config import Settings
 
 class ModelArtifactError(RuntimeError):
     """Raised when a model artifact is absent, incompatible, or cannot score."""
+
+
+class InputValidationError(ValueError):
+    """Raised when applicant values cannot satisfy the serving transformer."""
+
+    def __init__(self, message: str, *, field: str = "features") -> None:
+        super().__init__(message)
+        self.field = field
+
+    @property
+    def detail(self) -> list[dict[str, str]]:
+        return [{"field": self.field, "message": str(self)}]
 
 
 class _FeaturePredictor(Protocol):
@@ -239,8 +252,21 @@ class InferenceService:
                 transformer=artifact.transformer,
                 include_target=False,
             )
+        except (FeatureValidationError, SchemaValidationError) as exc:
+            message = str(exc)
+            field = next(
+                (
+                    name
+                    for name in raw_features
+                    if f"'{name}'" in message or f'"{name}"' in message
+                ),
+                "features",
+            )
+            raise InputValidationError(message, field=field) from exc
         except Exception as exc:
-            raise ModelArtifactError(f"Application feature transformation failed: {exc}") from exc
+            raise ModelArtifactError(
+                f"Application feature transformation failed: {exc}"
+            ) from exc
         features = (
             transformed.scaled_features
             if artifact.feature_view == "scaled"

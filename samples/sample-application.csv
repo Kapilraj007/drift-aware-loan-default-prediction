@@ -1,0 +1,2 @@
+annual_inc,dti,revol_util,revol_bal,open_acc,total_acc,delinq_2yrs,inq_last_6mths,loan_amnt,term,int_rate,installment,grade,sub_grade,purpose,emp_length,home_ownership,earliest_cr_line,issue_d
+75000,16.5,38%,28000,10,22,0,1,12000,36 months,11.2%,395,B,B3,debt_consolidation,5 years,MORTGAGE,Jan-2004,Jan-2018

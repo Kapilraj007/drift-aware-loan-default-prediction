@@ -1,69 +1,88 @@
-import { useState } from "react";
-import type { FormEvent } from "react";
+import { BankOutlined, LockOutlined, SafetyCertificateOutlined, UserOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Divider, Input, Space, Typography } from "antd";
+import { useRef, useState } from "react";
 import { ApiError } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
-export function LoginPage() {
-  const { signIn } = useAuth();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+const demoAccounts = [
+  { label: "Admin", username: "admin", password: "Admin@Demo2026" },
+  { label: "Risk analyst", username: "analyst", password: "Analyst@Demo2026" },
+  { label: "Officer · explanation", username: "officer.explain", password: "Officer1@Demo2026" },
+  { label: "Officer · score only", username: "officer.scoreonly", password: "Officer2@Demo2026" },
+] as const;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+export function LoginPage() {
+  const { signIn, sessionNotice, clearSessionNotice } = useAuth();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const fillAccount = (username: string, password: string) => {
+    const form = formRef.current;
+    const usernameInput = form?.elements.namedItem("username") as HTMLInputElement | null;
+    const passwordInput = form?.elements.namedItem("password") as HTMLInputElement | null;
+    if (usernameInput) usernameInput.value = username;
+    if (passwordInput) passwordInput.value = password;
+    usernameInput?.focus();
+  };
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    const form = new FormData(event.currentTarget);
-    const submittedUsername = String(form.get("username") ?? "").trim();
-    const submittedPassword = String(form.get("password") ?? "");
-    try {
-      await signIn(submittedUsername, submittedPassword);
-    } catch (reason) {
-      setError(reason instanceof ApiError ? reason.detail : "Sign-in failed. Please try again.");
-    } finally {
-      setSubmitting(false);
+    const data = new FormData(event.currentTarget);
+    const username = String(data.get("username") ?? "").trim();
+    const password = String(data.get("password") ?? "");
+    if (!username || !password) {
+      setError("Enter both your username and password.");
+      return;
     }
-  }
+    setBusy(true);
+    setError(null);
+    try {
+      await signIn(username, password);
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.status === 423) {
+        setError("This account is temporarily locked after repeated attempts. Try again later or contact an administrator.");
+      } else {
+        setError(reason instanceof ApiError ? reason.detail : "Sign-in failed. Check your credentials and try again.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <main className="auth-page">
-      <section className="auth-card" aria-labelledby="login-title">
-        <p className="eyebrow">Drift-aware loan review</p>
-        <h1 id="login-title">Loan Review Console</h1>
-        <p>
-          Review model-assisted risk assessments. A qualified officer remains responsible for every
-          lending decision.
-        </p>
-        <form onSubmit={handleSubmit} noValidate>
-          <label htmlFor="username">Username</label>
-          <input
-            id="username"
-            name="username"
-            autoComplete="username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            required
-          />
-          <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-          {error ? (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
+    <main className="login-layout">
+      <section className="login-brand-panel" aria-labelledby="product-name">
+        <div className="login-brand-content">
+          <BankOutlined className="login-mark" aria-hidden />
+          <Typography.Title id="product-name">DriftAware</Typography.Title>
+          <Typography.Title level={2}>Loan default review, with human judgment at the center.</Typography.Title>
+          <Typography.Paragraph>Score applications, understand model signals, record an auditable decision, and monitor whether risk patterns change over time.</Typography.Paragraph>
+          <div className="login-principle"><SafetyCertificateOutlined /><span><strong>Decision support only</strong><small>A qualified human always makes the final lending decision.</small></span></div>
+        </div>
+      </section>
+      <section className="login-form-panel" aria-label="Account sign in">
+        <Card className="login-card" variant="borderless">
+          <Typography.Title level={2}>Sign in</Typography.Title>
+          <Typography.Paragraph type="secondary">Use your assigned account to continue to the review workspace.</Typography.Paragraph>
+          {sessionNotice ? <Alert closable onClose={() => clearSessionNotice?.()} type="warning" showIcon message={sessionNotice} /> : null}
+          {error ? <Alert className="login-error" type="error" showIcon message={error} role="alert" /> : null}
+          <form ref={formRef} onSubmit={(event) => void submit(event)}>
+            <label htmlFor="username">Username</label>
+            <Input id="username" name="username" autoComplete="username" prefix={<UserOutlined />} disabled={busy} />
+            <label htmlFor="password">Password</label>
+            <Input.Password id="password" name="password" autoComplete="current-password" prefix={<LockOutlined />} disabled={busy} />
+            <Button block type="primary" htmlType="submit" loading={busy}>Sign in securely</Button>
+          </form>
+          {import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === "true" ? (
+            <div className="demo-accounts">
+              <Divider>Demo accounts · development only</Divider>
+              <Space direction="vertical" className="full-width">
+                {demoAccounts.map((account) => <Button key={account.username} block onClick={() => fillAccount(account.username, account.password)}>{account.label}</Button>)}
+              </Space>
+            </div>
           ) : null}
-          <button type="submit" className="button button-primary" disabled={submitting}>
-            {submitting ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
+        </Card>
       </section>
     </main>
   );

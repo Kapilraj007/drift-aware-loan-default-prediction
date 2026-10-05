@@ -12,6 +12,9 @@ jobs:
   python:
     name: Python lint and tests
     runs-on: ubuntu-latest
+    env:
+      # Direct URL for a dedicated Neon child branch. Never use the showcase URL.
+      TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,9 +36,17 @@ jobs:
       - name: Lint Python
         run: python -m ruff check .
 
+      - name: Verify committed OpenAPI document
+        run: |
+          python scripts/export_openapi.py
+          git diff --exit-code -- openapi.json
+
+      - name: Require isolated database secret
+        run: test -n "$TEST_DATABASE_URL"
+
       - name: Run Python tests
         run: >-
-          python -m pytest -q --cov=drift_loan --cov-report=term-missing
+          python -m pytest -q --cov=drift_loan --cov=backend --cov-report=term-missing
           --cov-fail-under=85
 
   frontend:
@@ -55,6 +66,11 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Verify generated API types
+        run: |
+          npm run generate:openapi
+          git diff --exit-code -- src/api/openapi.generated.ts
 
       - name: Lint frontend
         run: npm run lint

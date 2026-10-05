@@ -40,7 +40,16 @@ def generate_rows(count: int, seed: int) -> list[dict[str, object]]:
         risk_logit = -3.0 + 0.07 * dti + 0.08 * int_rate + 0.000018 * loan_amnt
         default_probability = 1 / (1 + math.exp(-risk_logit))
         roll = rng.random()
-        if index % 17 == 0:
+        # Guarantee that every represented quarter contains both resolved
+        # classes once it has at least two rows. This keeps the synthetic demo
+        # deterministic and prevents expanding-window folds from failing by
+        # chance, without changing any production training logic.
+        quarter_cycle = index // 20
+        if quarter_cycle == 0:
+            status = "Fully Paid"
+        elif quarter_cycle == 1:
+            status = "Charged Off"
+        elif index % 17 == 0:
             status = "Current"
         elif index % 29 == 0:
             status = "In Grace Period"
@@ -120,4 +129,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

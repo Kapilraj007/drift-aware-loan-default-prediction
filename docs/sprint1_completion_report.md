@@ -1,5 +1,8 @@
 # Sprint 1 completion report
 
+> Historical note: the container-based topology described in this report was
+> removed in Phase 2; current setup and verification commands are in the root README.
+
 ## Status
 
 Sprint 1 is complete against the real LendingClub accepted-loan dataset. The
@@ -100,8 +103,7 @@ outputs:
 
 Docker Desktop 29.7.2 was started and the repository Dockerfile was built as
 `drift-loan-sprint1:verified`. The retained image's exact creation time, size,
-ID, and digest are recorded outside the image in
-[`../reports/generated/docker_validation.json`](../reports/generated/docker_validation.json).
+ID, and digest were recorded in the generated evidence set available at the time.
 Launching it with `--version` returned `drift-loan 0.1.0`.
 
 A mounted 400-row synthetic fixture then exercised the packaged build command
@@ -135,7 +137,6 @@ perturbations successfully.
 - `reports/generated/feature_store_validation.json`
 - `reports/generated/feature_store_reproducibility.json`
 - `reports/generated/acquisition_validation.json`
-- `reports/generated/docker_validation.json`
 - `reports/generated/drift/`
 
 The selected UCI German Credit bytes are acquired and provenance-verified. Its

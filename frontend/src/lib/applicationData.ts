@@ -1,5 +1,6 @@
 import type {
   ApplicationDraft,
+  ApplicationFieldDefinition,
   ApplicationFeatureName,
   LoanApplicationFeatures,
 } from "../types";
@@ -39,7 +40,12 @@ function nonEmpty(value: string): string {
   return value.trim();
 }
 
-export function validateApplicationDraft(draft: ApplicationDraft): DataQualityResult {
+const validMonth = /^(?:[A-Z][a-z]{2}-(?:\d{2}|\d{4})|\d{4}-(?:0[1-9]|1[0-2])(?:-\d{2})?)$/;
+
+export function validateApplicationDraft(
+  draft: ApplicationDraft,
+  fields: readonly ApplicationFieldDefinition[] = [],
+): DataQualityResult {
   const errors: Partial<Record<ApplicationFeatureName, string>> = {};
   const warnings: string[] = [];
 
@@ -56,10 +62,38 @@ export function validateApplicationDraft(draft: ApplicationDraft): DataQualityRe
     }
   }
 
+  const definitions = new Map(fields.map((field) => [field.name, field]));
+  for (const [name, definition] of definitions) {
+    const value = nonEmpty(draft[name]);
+    if (definition.required && !value) {
+      errors[name] = `${definition.label} is required.`;
+    }
+    if (value && definition.allowed_values?.length) {
+      const allowed = definition.allowed_values.map(String);
+      const termAliases = name === "term" && allowed.includes(value.replace(/\s+months?$/i, ""));
+      if (!allowed.includes(value) && !termAliases) {
+        errors[name] = `Choose one of the allowed ${definition.label.toLowerCase()} values.`;
+      }
+    }
+  }
+
   if (!nonEmpty(draft.issue_d)) {
     errors.issue_d = "Application month is required.";
-  } else if (Number.isNaN(Date.parse(draft.issue_d))) {
-    errors.issue_d = "Use a recognizable month and year, for example Jan-2018.";
+  } else if (!validMonth.test(nonEmpty(draft.issue_d))) {
+    errors.issue_d = "Use Mon-YYYY, Mon-YY, or an ISO month, for example Jan-2018.";
+  }
+
+  if (nonEmpty(draft.earliest_cr_line) && !validMonth.test(nonEmpty(draft.earliest_cr_line))) {
+    errors.earliest_cr_line = "Use Mon-YYYY, Mon-YY, or an ISO month, for example Jan-2004.";
+  }
+  if (nonEmpty(draft.term) && !/^(?:36|60)(?:\.0)?(?: months?)?$/i.test(nonEmpty(draft.term))) {
+    errors.term = "Term must be 36 or 60 months.";
+  }
+  if (nonEmpty(draft.emp_length) && !/^(?:n\/?a|<\s*1 year|less than 1 year|\d+(?:\.\d+)?\+?\s*(?:years?)?)$/i.test(nonEmpty(draft.emp_length))) {
+    errors.emp_length = "Use a number of years, < 1 year, 10+ years, or n/a.";
+  }
+  if (nonEmpty(draft.sub_grade) && !/^[A-G][1-5]$/.test(nonEmpty(draft.sub_grade))) {
+    errors.sub_grade = "Sub-grade must be A1 through G5.";
   }
 
   if (nonEmpty(draft.dti) && Number(draft.dti) > 100) {

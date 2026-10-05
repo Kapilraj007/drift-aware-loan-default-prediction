@@ -42,4 +42,29 @@ describe("ApiClient", () => {
       detail: "Application access is denied",
     });
   });
+
+  it("clears an authenticated session and invokes the global 401 handler", async () => {
+    const unauthorized = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Token expired" }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new ApiClient("/api/v1");
+    client.setToken("expired-token");
+    client.setUnauthorizedHandler(unauthorized);
+
+    await expect(client.currentUser()).rejects.toMatchObject({ status: 401 });
+    expect(unauthorized).toHaveBeenCalledOnce();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: "user-1" }), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await client.currentUser();
+    expect(new Headers(fetchMock.mock.calls[1][1]?.headers).has("Authorization")).toBe(false);
+  });
 });

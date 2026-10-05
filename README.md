@@ -1,338 +1,238 @@
-# Drift Aware Loan Default Prediction
+# Drift-Aware Loan Default Decision Support
 
-This repository contains the completed Sprint 1 and Sprint 2 foundation plus
-the Sprint 3 React review console for a drift-aware, explainable loan-default
-research system. It turns
-LendingClub-shaped accepted-loan CSV files into a leakage-safe,
-time-partitioned Parquet feature store, trains and evaluates chronological
-default-risk models, and exposes auditable decision-support APIs, a
-role-aware human-review interface, and drift monitoring.
-
-The system is decision support for human credit officers. It does not approve
-or decline applications, and its trained artifacts are research models rather
-than a production lending-decision system.
-
-## Documentation guide
-
-- [`data/README.md`](data/README.md) explains dataset acquisition, target
-  construction, the chronological train/validation/test split, preprocessing,
-  feature views, model families, and the verified evaluation results.
-- [`docs/sprint1_data_flow.md`](docs/sprint1_data_flow.md) documents the feature
-  pipeline and leakage controls in detail.
-- [`docs/sprint2_runbook.md`](docs/sprint2_runbook.md) covers model training and
-  local API operations.
-- [`frontend/README.md`](frontend/README.md) covers the reviewer interface.
-- [`docs/sprint3_verification.md`](docs/sprint3_verification.md) is the complete
-  local verification and smoke-test runbook.
-
-## Sprint 1 result
-
-- Strict CSV ingestion with an explicit predictor allowlist and documented
-  post-origination leakage denylist.
-- Binary outcome construction: `Charged Off` and `Default` map to `1`, `Fully
-  Paid` maps to `0`, and unresolved statuses are excluded and counted.
-- Shared `LoanFeatureTransformer` used by both the training pipeline and the
-  future FastAPI service through `backend/app/ml/transform_features.py`.
-- Median imputation learned only from the temporal training window, a missing
-  flag for every numeric and engineered feature, fixed target-independent
-  grade/sub-grade mappings, and training-only one-hot vocabularies.
-- Engineered loan-to-income, installment-to-income, and credit-history-years
-  features.
-- Both unscaled tree-model features and a StandardScaler view for the Sprint 2
-  logistic-regression baseline.
-- Deterministic, complete-quarter train/validation/shift splits and Parquet
-  partitions by `issue_quarter`.
-- Persisted transformer, schema, scaler metadata, build manifest, and a
-  run-specific data dictionary with observed null rates.
-- Reproducible time-window slicing plus seeded absolute/relative perturbations
-  for `int_rate` and `dti`, with an audit manifest and before/after statistics.
-- Executable EDA notebook for resolved-loan class balance, quarterly volume,
-  and quarterly default rate.
-- Dataset provenance, citation, licensing caveats, static schema documentation,
-  pinned dependencies, Docker packaging, and automated tests.
-
-## Sprint 2 result
-
-- LightGBM primary model, XGBoost robustness cross-check, and L2 logistic
-  baseline trained from the existing frozen Parquet feature store.
-- Expanding-window temporal model selection, with thresholds selected on
-  validation only and a locked latest-quarter shift evaluation.
-- Versioned estimator, feature schema, metrics, persisted SHAP TreeExplainer,
-  and ADWIN detector under `data/artifacts/model/`.
-- FastAPI backend with JWT roles, applications, predictions, SHAP narratives,
-  feedback audit logging, KS feature drift, and ADWIN score-stream status.
-- PostgreSQL, Redis, API, and opt-in Celery worker Docker Compose topology.
-
-## Sprint 3 result
-
-- React/Vite loan-review interface with JWT sign-in, role-aware navigation,
-  accessible loading/error states, and a responsive desktop/mobile layout.
-- Manual and first-row CSV/JSON application intake, client-side data-quality
-  checks, persisted application-to-prediction sequencing, and a risk-score
-  card that remains decision support rather than an automated loan decision.
-- Server-recorded loan-officer explanation-study assignment: the
-  explanation arm receives an accessible signed top-five SHAP view and
-  narrative, while the score-only arm is protected by the API as well as the
-  UI.
-- Auditable approve, decline, and escalate feedback with agreement/override
-  state and notes; analyst/admin KS and ADWIN monitoring history; and a
-  human-confirmed retraining-review ticket that never queues or deploys a
-  model automatically.
-- Production static frontend container with an Nginx same-origin `/api` proxy,
-  available through the opt-in `frontend` Docker Compose profile.
-
-See the [Sprint 3 verification runbook](docs/sprint3_verification.md) for the
-local quality checks, live smoke flow, and isolated inference load test.
-
-The primary LightGBM run achieved validation ROC-AUC **0.7188**, PR-AUC
-**0.3904**, F1 **0.4412**, and held-out shift ROC-AUC **0.6948**, PR-AUC
-**0.3817**, F1 **0.4418**. These are decision-support metrics, not an
-automated approval/denial policy. The late 2018 labels have maturity limitations,
-so interpret per-quarter results alongside aggregate metrics. See the
-[Sprint 2 completion report](docs/sprint2_completion_report.md) and
-[operations runbook](docs/sprint2_runbook.md).
-
-## Verified real-data run
-
-Sprint 1 has been executed against Kaggle's Version 3 LendingClub accepted-loan
-artifact, not only against synthetic fixtures. The preserved archive is
-`accepted_2007_to_2018Q4.csv.gz` (392,582,231 bytes; SHA-256
-`55c16f75120f897683f02e7aabcf080d0e4a20c4832feb1d592cfa941bd62a2d`).
-The decompressed pipeline input is 1,675,133,810 bytes with SHA-256
-`3eae03c28fd9d2e8a076ebeb73507e8d4d0f44d90500decdb0936e0933d1f36a`.
-
-The completed run produced:
-
-- 2,260,701 accepted-loan rows scanned;
-- 1,345,350 resolved outcomes: 1,076,751 fully paid and 268,599
-  default/charged-off loans;
-- 47 chronological partitions from 2007Q2 through 2018Q4;
-- 53 leakage-safe model features;
-- 274,970 training, 726,519 validation, and 343,861 shift rows; and
-- zero missing/non-finite model values and an empty leakage-feature
-  intersection in the persisted feature store.
-
-The machine-readable evidence is in
-[`data/raw/acquisition_manifest.csv`](data/raw/acquisition_manifest.csv), the
-local feature-store `manifest.json`, and
-`reports/generated/feature_store_validation.json`. Generated row-level and
-report artifacts remain excluded from version control.
-
-The plan's default secondary benchmark, UCI Statlog German Credit, is also
-downloaded from the official UCI archive and checksum-verified. Its 1,000 rows
-are staged for later cross-dataset model evaluation and are not combined with
-the LendingClub feature store.
-
-## Data flow
+This local research showcase estimates loan-default risk, conditionally shows
+model explanations, records a qualified human's decision, and monitors drift.
+It never approves or declines a loan automatically.
 
 ```text
-Accepted-loan CSV
-  -> allowlisted ingestion and outcome resolution
-  -> complete-quarter temporal split
-  -> fit transformer on train only
-  -> transform validation and shift with frozen state
-  -> unscaled + scaled Parquet partitions by issue quarter
-  -> arbitrary time windows
-  -> optional seeded interest-rate / DTI perturbation
+Browser -> Vite proxy -> FastAPI -> Neon pooled endpoint -> Neon PostgreSQL
+                            |
+                            +-> local model and Parquet artifacts
+
+Alembic, seed, check, and export scripts -> Neon direct endpoint
+Automated tests                          -> separate Neon test branch
 ```
 
-The verified feature store uses complete, non-overlapping issue quarters:
+See [Architecture](docs/architecture.md), [RBAC](docs/rbac.md), the
+[full-stack contract](docs/full_stack_contract.md), and the
+[showcase walkthrough](docs/showcase_walkthrough.md) for details.
 
-| Dataset role | Issue quarters | Rows | Purpose |
-| --- | --- | ---: | --- |
-| Train | 2007Q2-2014Q1 | 274,970 | Fit preprocessing and estimators |
-| Validation | 2014Q2-2016Q2 | 726,519 | Select model settings and thresholds |
-| Test / shift holdout | 2016Q3-2018Q4 | 343,861 | Final locked temporal evaluation |
+## Prerequisites
 
-The trained model families are LightGBM (primary), XGBoost (robustness
-cross-check), and L2 logistic regression (scaled-feature baseline). See the
-[data and modeling README](data/README.md) for the split rules, why the latest
-window is called `shift` in code, and per-model validation/test metrics.
+- Python 3.12
+- Node.js 22
+- A free Neon account and internet access
+- PowerShell 7 on Windows, or a POSIX-compatible shell on macOS/Linux
 
-See [the detailed data flow](docs/sprint1_data_flow.md), [the data
-dictionary](docs/data_dictionary.md), and [the provenance and redistribution
-policy](docs/data_provenance.md). The measured results and gate evidence are in
-the [Sprint 1 completion report](docs/sprint1_completion_report.md).
+Application and audit records live in Neon. Feature stores, preprocessors, and
+model bundles remain under the ignored local `data/` tree.
 
-## Local setup
+## One-time Neon setup
 
-Python 3.11 through 3.13 is supported. The commands below use PowerShell.
+1. Create a Neon project in the region closest to the showcase machine.
+2. In **Connect**, copy the main branch's pooled URL (host contains `-pooler`)
+   as `DATABASE_URL` and direct URL as `DIRECT_DATABASE_URL`.
+3. Create a child branch named `test`; copy its direct URL as
+   `TEST_DATABASE_URL`. Never point tests at the showcase branch.
+4. Copy `.env.example` to ignored `.env`. Fill the three URLs and a unique
+   `JWT_SECRET_KEY` of at least 32 characters.
+5. Keep `sslmode=require` and any supplied `channel_binding=require` option.
+
+Never commit secrets. Rotate the Neon role password immediately if a URL is
+exposed.
+
+## First-time setup: one command
+
+The setup wrapper creates the venv, installs dependencies, migrates and checks
+Neon, trains the 20,000-row synthetic demo model, seeds four users, and runs
+static checks. It stops on the first failure.
+
+```powershell
+.\scripts\dev-setup.ps1
+```
+
+```sh
+./scripts/dev-setup.sh
+```
+
+On its first run, the wrapper creates `.env` and stops. Fill it, then run the
+same command again. It also copies the non-secret frontend defaults to ignored
+`frontend/.env.local` when that file is absent.
+
+Manual equivalents:
 
 ```powershell
 py -3.12 -m venv .venv
-& .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-& .\.venv\Scripts\python.exe -m pip install --no-deps -e .
-```
-
-Raw and derived row-level data are intentionally ignored by Git.
-
-## Fast end-to-end smoke run
-
-The demo generator creates LendingClub-shaped synthetic rows solely for
-pipeline verification. Do not use its outputs as research findings.
-
-```powershell
-& .\.venv\Scripts\python.exe scripts\generate_demo_data.py `
-  --output data\raw\demo_accepted_loans.csv --rows 400
-
-& .\.venv\Scripts\python.exe -m drift_loan build `
-  --input data\raw\demo_accepted_loans.csv `
-  --feature-store data\processed\demo_feature_store `
-  --artifact-directory data\artifacts\demo_preprocessor `
-  --overwrite
-
-& .\.venv\Scripts\python.exe -m drift_loan simulate-drift `
-  data\processed\demo_feature_store `
-  --int-rate-shift 0.15 --int-rate-mode relative `
-  --dti-shift 3 --dti-mode absolute `
-  --seed 20260926 `
-  --output data\processed\demo_drift_window.parquet
-```
-
-Every build prints a JSON summary. The feature-store manifest records source
-paths, loaded columns, unresolved-row counts, split quarters, row counts,
-feature order, seed, and fitted-artifact location. Every simulated window gets
-an adjacent `.manifest.json` audit record.
-
-## Reproduce the research-data run
-
-The current local workspace already contains the verified archive and extracted
-input. For a new environment, review `docs/data_provenance.md`, acquire the
-accepted-loan file through Kaggle's official workflow, fill
-`data/raw/acquisition_manifest.csv`, and place the extracted file at
-`data/raw/accepted_loans.csv`. Then run:
-
-```powershell
-& .\.venv\Scripts\python.exe -m drift_loan build `
-  --config config\pipeline.json `
-  --overwrite
-
-& .\.venv\Scripts\python.exe scripts\validate_feature_store.py `
-  data\processed\feature_store `
-  --acquisition-manifest data\raw\acquisition_manifest.csv `
-  --output reports\generated\feature_store_validation.json
-
-& .\.venv\Scripts\python.exe scripts\validate_acquisitions.py `
-  data\raw\acquisition_manifest.csv `
-  --output reports\generated\acquisition_validation.json
-```
-
-The pipeline accepts multiple `--input` arguments, tolerates the common Kaggle
-preamble before the CSV header, and automatically selects a disk-backed,
-bounded-memory build for large inputs. `--chunk-size` controls its parser and
-transform batches. It refuses to overwrite a feature store unless
-`--overwrite` is explicit.
-
-## Execute the EDA notebook
-
-```powershell
-& .\.venv\Scripts\python.exe scripts\execute_eda_notebook.py `
-  --data data\raw\accepted_loans.csv `
-  --output-notebook reports\generated\01_eda_executed.ipynb `
-  --output-dir reports\generated\eda
-```
-
-The runner hashes the configured input and writes only aggregate tables,
-figures, metadata, and the executed notebook. The source notebook contains no
-cached or fabricated findings.
-
-## Train and serve the Sprint 2 system
-
-Train all three model families from the existing feature store. The command
-writes the primary LightGBM artifact, SHAP explainer, ADWIN state, schema, and
-validation/shift metrics atomically.
-
-```powershell
-& .\.venv\Scripts\python.exe -m drift_loan train-model `
-  --feature-store data\processed\feature_store `
-  --model-directory data\artifacts\model `
-  --overwrite
-
-& .\.venv\Scripts\python.exe scripts\evaluate_sprint2_model.py `
-  --feature-store data\processed\feature_store `
-  --model-directory data\artifacts\model `
-  --output reports\generated\sprint2_model_evaluation.json
-```
-
-For local API, database, Redis, and optional queue-worker startup, follow the
-[Sprint 2 runbook](docs/sprint2_runbook.md). The API Swagger UI is available at
-`/docs` after startup.
-
-## Run the Sprint 3 interface
-
-With the API available locally, start the Vite development server from the
-frontend directory. Its `/api` proxy targets `http://127.0.0.1:8000` by
-default.
-
-```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install --no-deps -e .
 Push-Location frontend
 npm ci
-npm run dev
+Pop-Location
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe scripts\check_db.py --pooled
+.\.venv\Scripts\python.exe scripts\prepare_demo.py
+.\.venv\Scripts\python.exe scripts\export_openapi.py
+Push-Location frontend
+npm run generate:openapi
 Pop-Location
 ```
 
-Set `VITE_PROXY_TARGET` for a different development API address, or
-`VITE_API_BASE_URL` when serving the static bundle behind another proxy. See
-the [frontend README](frontend/README.md) for the supported flow and roles.
+`prepare_demo.py` generates synthetic LendingClub-shaped data, builds the
+feature store, trains all three model families, writes sample application and
+drift cohorts, verifies a real prediction, migrates Neon, and seeds demo data.
 
-## Docker
+## Day-to-day start: one command
+
+Run this one or two minutes before a demo; it checks and wakes Neon, then starts
+the one-worker API and Vite frontend. Ctrl+C stops both. Logs are under
+`.tmp/dev-logs/`.
 
 ```powershell
-docker build -t drift-loan-sprint1:verified .
-docker run --rm --mount "type=bind,source=${PWD},target=/project" `
-  drift-loan-sprint1:verified build `
-  --input /project/data/raw/accepted_loans.csv `
-  --feature-store /project/data/processed/feature_store `
-  --artifact-directory /project/data/artifacts/preprocessor
+.\scripts\dev-start.ps1
 ```
 
-The container defaults to the `drift-loan` CLI and uses pinned runtime
-dependencies. The image has been built and launched successfully, including
-containerized feature-store and drift-simulation smoke runs; exact evidence is
-in `reports/generated/docker_validation.json`. Notebook execution and tests use
-`requirements-dev.txt` locally.
-
-The Sprint 3 static frontend is an opt-in Compose profile so it does not alter
-the API-only workflow. It builds `frontend/Dockerfile`, serves the SPA with
-Nginx, and proxies `/api` to the Compose API service:
-
-```powershell
-docker compose --profile frontend up --build frontend
+```sh
+./scripts/dev-start.sh
 ```
 
-It is available at `http://localhost:5173` by default; set `FRONTEND_PORT` to
-change the host port.
+| Service | URL |
+| --- | --- |
+| Frontend | <http://127.0.0.1:5173> |
+| API / OpenAPI | <http://127.0.0.1:8000> / <http://127.0.0.1:8000/docs> |
+| DB-free liveness | <http://127.0.0.1:8000/healthz> |
+| Manual readiness | <http://127.0.0.1:8000/readyz> |
 
-## Quality checks
+Manual start, in separate terminals:
 
 ```powershell
-& .\.venv\Scripts\python.exe -m ruff check .
-& .\.venv\Scripts\python.exe -m pytest -q `
-  --cov=drift_loan --cov-report=term-missing --cov-fail-under=85
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:create_app --factory --host 127.0.0.1 --port 8000 --workers 1
+Set-Location frontend
+npm run dev -- --host 127.0.0.1
+```
 
+The Vite proxy is the only frontend proxy. `/readyz` reaches Neon and loads the
+model, so use it manually and never poll it.
+
+## Demo credentials
+
+These development defaults come from `.env.example`; change them if the
+showcase machine is shared. The UI shows them only when
+`VITE_SHOW_DEMO_CREDENTIALS=true`.
+
+| Role / arm | Username | Default password |
+| --- | --- | --- |
+| Administrator | `admin` | `Admin@Demo2026` |
+| Risk analyst | `analyst` | `Analyst@Demo2026` |
+| Officer, explanation | `officer.explain` | `Officer1@Demo2026` |
+| Officer, score-only | `officer.scoreonly` | `Officer2@Demo2026` |
+
+## Pre-demo checklist
+
+1. Confirm internet access.
+2. Run the start wrapper one or two minutes early to wake Neon.
+3. Open `/readyz` once; confirm database, migration, and model readiness.
+4. Confirm the synthetic-model banner is visible.
+5. Log in once as all four demo users and check their sidebar entries.
+6. Confirm both cohort CSVs exist in `samples/`.
+7. Optionally export a read-only backup with
+   `.\.venv\Scripts\python.exe scripts\export_demo_db.py --output backups\pre-show.json`.
+
+## Database lifecycle and safety
+
+- The API uses only the pooled `DATABASE_URL`.
+- Alembic and administrative scripts use only the direct
+  `DIRECT_DATABASE_URL`.
+- Runtime connections use pre-ping, a small pool, a 240-second recycle,
+  bounded cold-start retries, and `prepare_threshold=None` for PgBouncer.
+- Startup stops with `alembic upgrade head` guidance if migrations are behind.
+- `/healthz` never queries Neon; `/readyz` is a manual DB-backed diagnostic.
+- Tests require a direct `TEST_DATABASE_URL` for a separate Neon branch. The
+  guard rejects the configured showcase endpoints before destructive checks.
+- The migration integration check performs `upgrade head -> downgrade base ->
+  upgrade head`; never use the showcase URL as `TEST_DATABASE_URL`.
+
+## Verification commands
+
+```powershell
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m pytest -q --basetemp .tmp\pytest -p no:cacheprovider
 Push-Location frontend
-npm ci
 npm run lint
-npm run test
+npm run test -- --run
 npm run build
+npm run test:e2e
 Pop-Location
 ```
 
-The Python coverage threshold is an independent required gate: report the
-test-case result and coverage-gate result separately if the assertions pass
-but coverage remains below 85%.
+The plain Playwright command is safe to use for test discovery, but the
+real-stack suite is deliberately skipped unless `E2E_REAL_STACK=true`.
+For a real run, first migrate and seed a dedicated Neon test branch and start
+the API and UI on ports 8000 and 5173 with the API connected to that branch.
+Never use the showcase branch. In the Playwright terminal, provide the direct
+test-branch URL and masked credentials explicitly:
+
+```powershell
+$env:TEST_DATABASE_URL = "postgresql://TEST_USER:***@ep-test.REGION.aws.neon.tech/TEST_DB?sslmode=require"
+$env:E2E_REAL_STACK = "true"
+$env:E2E_ADMIN_PASSWORD = "***"
+$env:E2E_ANALYST_PASSWORD = "***"
+$env:E2E_EXPLAIN_PASSWORD = "***"
+$env:E2E_SCORE_ONLY_PASSWORD = "***"
+npm --prefix frontend run test:e2e
+```
+
+`TEST_DATABASE_URL` must be the direct URL of the isolated test branch. The
+suite refuses a pooled test URL and refuses a test target that matches an
+exported showcase `DATABASE_URL` or `DIRECT_DATABASE_URL`. The test URL only
+enables the safety guard; it does not reconfigure an already-running API, so
+verify the API process itself was launched against the same isolated branch.
+Consult the [verification report](docs/verification_report.md) before calling a
+check passed; it separates executed evidence from unverified work.
+
+## Troubleshooting
+
+| Symptom | Meaning and action |
+| --- | --- |
+| Database waking / slow first request | Wait for the bounded retry, then run `scripts/check_db.py --pooled` once. |
+| Connection timeout | Confirm internet access, Neon project state/quota, endpoint names, and password. |
+| SSL or channel-binding error | Copy the URL again and retain `sslmode=require` and supplied channel binding. Never disable SSL. |
+| `prepared statement ... does not exist` | Ensure runtime `DATABASE_URL` contains `-pooler`, keep auto-prepare disabled, and rerun `scripts/check_db.py --pooled`. |
+| Alembic fails through a pooler | `DIRECT_DATABASE_URL` must use the non-`-pooler` endpoint. |
+| Password was rotated | Replace both main-branch URLs in `.env`, then restart the API. |
+| Free-plan quota exhausted | Check Neon usage and avoid polling DB-backed endpoints. |
+| Migration behind | Run `.\.venv\Scripts\python.exe -m alembic upgrade head`, then restart. |
+| Model missing | Run `.\.venv\Scripts\python.exe scripts\prepare_demo.py --artifacts-only`, then restart. |
+| HTTP 422 | Request data is invalid; correct the returned field errors. This is not an infrastructure failure. |
+| HTTP 503 | The model or database is unavailable. For `database_waking`, allow retry, then use `/readyz`. |
+| Setup stops during seed | Check all four `SEED_*_PASSWORD` values, migration head, and that `APP_ENV` is not `production`. |
+
+## Optional emergency backup
+
+The read-only JSON exporter uses the direct endpoint. It supplements, but does
+not replace, Neon branches or managed backups.
+
+```powershell
+.\.venv\Scripts\python.exe scripts\export_demo_db.py --output backups\demo-export.json
+```
+
+There is intentionally no automatic restore command. Restore into a newly
+migrated Neon branch with a reviewed one-time importer so foreign-key ordering
+and account data can be checked explicitly.
 
 ## Repository layout
 
 ```text
-backend/       FastAPI application, persistence, auth, inference, and monitoring services
-config/        Reproducible pipeline configuration
-data/          Raw, interim, processed, and fitted-artifact locations
-docs/          Data dictionary, source registry, provenance, and architecture
-frontend/      Sprint 3 React/Vite loan-review interface, tests, and Nginx container
-monitoring/    Drift-harness boundary and monitor workspace
-notebooks/     Data-aware Sprint 1 EDA
-scripts/       Demo generation, notebook execution, validation, and reproducibility
-src/           Installable data-pipeline and drift-simulation package
-tests/         Unit, integration, CLI, and notebook-contract tests
+src/drift_loan/       data pipeline, training, drift harness, CLI
+backend/app/          FastAPI routes, services, PostgreSQL models, seed logic
+backend/migrations/   Alembic migrations (direct Neon endpoint)
+frontend/             routed React/Vite/Ant Design application
+scripts/              setup, start, check, preparation, and export tools
+samples/              sample application and reference/drifted cohorts
+tests/                unit and guarded Neon integration tests
+docs/                 architecture, RBAC, walkthrough, contract, and evidence
+data/                 local raw/interim/processed/model artifacts (ignored)
 ```
+
+Synthetic results are demonstration evidence only and must not be presented as
+research performance. Feature engineering, temporal splits, model selection,
+thresholds, and published metrics are intentionally unchanged.

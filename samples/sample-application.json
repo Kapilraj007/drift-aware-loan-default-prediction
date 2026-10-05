@@ -1,0 +1,21 @@
+{
+  "annual_inc": 75000,
+  "delinq_2yrs": 0,
+  "dti": 16.5,
+  "earliest_cr_line": "Jan-2004",
+  "emp_length": "5 years",
+  "grade": "B",
+  "home_ownership": "MORTGAGE",
+  "inq_last_6mths": 1,
+  "installment": 395,
+  "int_rate": "11.2%",
+  "issue_d": "Jan-2018",
+  "loan_amnt": 12000,
+  "open_acc": 10,
+  "purpose": "debt_consolidation",
+  "revol_bal": 28000,
+  "revol_util": "38%",
+  "sub_grade": "B3",
+  "term": "36 months",
+  "total_acc": 22
+}

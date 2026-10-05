@@ -1,5 +1,8 @@
 # Sprint 1 Final Audit
 
+> Historical note: packaging evidence below records the topology that existed
+> during Sprint 1. Those deployment files were intentionally removed in Phase 2.
+
 ## Conclusion
 
 Sprint 1 is complete against Section 2 of the project plan as of 2026-09-29.
@@ -19,7 +22,7 @@ study from later sections as Sprint 1 deliverables.
 | --- | --- | --- |
 | Initialize `data`, `notebooks`, `backend`, `frontend`, `docs`, and `monitoring` | Passed | All six directories exist; each future subsystem has an explicit boundary or README |
 | Pin dependencies | Passed | `requirements.txt`, `requirements-dev.txt`, and `pyproject.toml` pin the runtime, development, and build dependencies |
-| Provide a reproducible Dockerfile | Passed | Image `drift-loan-sprint1:verified` built and launched; exact image identity is recorded in `reports/generated/docker_validation.json` |
+| Provide the historical packaged runtime | Passed | Image `drift-loan-sprint1:verified` was built and launched during Sprint 1; that packaging was removed in Phase 2 |
 | Use one transform implementation for training and future serving | Passed | `LoanFeatureTransformer` is used by the pipeline and re-exported by `backend/app/ml/transform_features.py` |
 | Keep the system assistive and human-gated | Passed | README states that Sprint 1 is decision-support infrastructure and does not approve, decline, or train a production model |
 

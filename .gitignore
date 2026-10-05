@@ -46,3 +46,4 @@ data/*.db
 reports/generated/*
 !reports/generated/.gitkeep
 .tmp/
+backups/

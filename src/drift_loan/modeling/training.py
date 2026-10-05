@@ -119,6 +119,7 @@ class TrainingConfig:
 
     random_seed: int = 20260926
     cv_splits: int = 3
+    synthetic_demo: bool = False
     lightgbm_candidates: tuple[Mapping[str, Any], ...] = field(
         default_factory=lambda: (
             {
@@ -158,6 +159,8 @@ class TrainingConfig:
             raise ModelingDataError("cv_splits must be a positive integer.")
         if self.cv_splits < 1:
             raise ModelingDataError("cv_splits must be a positive integer.")
+        if not isinstance(self.synthetic_demo, bool):
+            raise ModelingDataError("synthetic_demo must be a boolean.")
         object.__setattr__(self, "random_seed", int(self.random_seed))
         object.__setattr__(self, "cv_splits", int(self.cv_splits))
         object.__setattr__(
@@ -620,6 +623,7 @@ def _write_training_artifacts(
             "threshold_source": "validation_only_f1",
             "feature_view": evaluations[PRIMARY_MODEL_NAME].feature_view,
             "random_seed": config.random_seed,
+            "synthetic_demo": config.synthetic_demo,
             "source_feature_store": str(dataset.root),
             "source_feature_store_manifest_sha256": dataset.manifest_sha256,
             "training_window": _window_metadata(training_frame, split_name="train"),

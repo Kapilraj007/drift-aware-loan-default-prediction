@@ -1,0 +1,175 @@
+{
+  "after_stats": {
+    "dti": {
+      "finite_count": 3635,
+      "maximum": 53.0,
+      "mean": 28.725727647867952,
+      "median": 28.72,
+      "minimum": 8.0,
+      "missing_count": 0,
+      "non_finite_count": 0,
+      "non_null_count": 3635,
+      "q25": 23.745,
+      "q75": 33.64,
+      "row_count": 3635,
+      "std": 7.160289101276382
+    },
+    "int_rate": {
+      "finite_count": 3635,
+      "maximum": 31.51,
+      "mean": 19.542123796423656,
+      "median": 19.65,
+      "minimum": 9.0,
+      "missing_count": 0,
+      "non_finite_count": 0,
+      "non_null_count": 3635,
+      "q25": 17.490000000000002,
+      "q75": 21.6,
+      "row_count": 3635,
+      "std": 3.098702342071109
+    }
+  },
+  "before_stats": {
+    "dti": {
+      "finite_count": 3635,
+      "maximum": 45.0,
+      "mean": 20.72572764786795,
+      "median": 20.72,
+      "minimum": 0.0,
+      "missing_count": 0,
+      "non_finite_count": 0,
+      "non_null_count": 3635,
+      "q25": 15.745000000000001,
+      "q75": 25.64,
+      "row_count": 3635,
+      "std": 7.160289101276382
+    },
+    "int_rate": {
+      "finite_count": 3635,
+      "maximum": 27.51,
+      "mean": 15.54212379642366,
+      "median": 15.65,
+      "minimum": 5.0,
+      "missing_count": 0,
+      "non_finite_count": 0,
+      "non_null_count": 3635,
+      "q25": 13.49,
+      "q75": 17.6,
+      "row_count": 3635,
+      "std": 3.098702342071109
+    }
+  },
+  "feature_view": "unscaled",
+  "metadata_columns": [
+    "issue_d",
+    "issue_quarter",
+    "dataset_split"
+  ],
+  "perturbations": [
+    {
+      "after": {
+        "finite_count": 3635,
+        "maximum": 31.51,
+        "mean": 19.542123796423656,
+        "median": 19.65,
+        "minimum": 9.0,
+        "missing_count": 0,
+        "non_finite_count": 0,
+        "non_null_count": 3635,
+        "q25": 17.490000000000002,
+        "q75": 21.6,
+        "row_count": 3635,
+        "std": 3.098702342071109
+      },
+      "before": {
+        "finite_count": 3635,
+        "maximum": 27.51,
+        "mean": 15.54212379642366,
+        "median": 15.65,
+        "minimum": 5.0,
+        "missing_count": 0,
+        "non_finite_count": 0,
+        "non_null_count": 3635,
+        "q25": 13.49,
+        "q75": 17.6,
+        "row_count": 3635,
+        "std": 3.098702342071109
+      },
+      "changed_rows": 3635,
+      "eligible_rows": 3635,
+      "selected_positions_sha256": "60b9f0e86ca0d6c40b7b599ae106f2c5b2c7947774d50120faf9cfb86177db77",
+      "selected_rows": 3635,
+      "specification": {
+        "clip": [
+          0.0,
+          40.0
+        ],
+        "feature": "int_rate",
+        "fraction": 1.0,
+        "mode": "absolute",
+        "shift": 4.0
+      }
+    },
+    {
+      "after": {
+        "finite_count": 3635,
+        "maximum": 53.0,
+        "mean": 28.725727647867952,
+        "median": 28.72,
+        "minimum": 8.0,
+        "missing_count": 0,
+        "non_finite_count": 0,
+        "non_null_count": 3635,
+        "q25": 23.745,
+        "q75": 33.64,
+        "row_count": 3635,
+        "std": 7.160289101276382
+      },
+      "before": {
+        "finite_count": 3635,
+        "maximum": 45.0,
+        "mean": 20.72572764786795,
+        "median": 20.72,
+        "minimum": 0.0,
+        "missing_count": 0,
+        "non_finite_count": 0,
+        "non_null_count": 3635,
+        "q25": 15.745000000000001,
+        "q75": 25.64,
+        "row_count": 3635,
+        "std": 7.160289101276382
+      },
+      "changed_rows": 3635,
+      "eligible_rows": 3635,
+      "selected_positions_sha256": "60b9f0e86ca0d6c40b7b599ae106f2c5b2c7947774d50120faf9cfb86177db77",
+      "selected_rows": 3635,
+      "specification": {
+        "clip": [
+          0.0,
+          100.0
+        ],
+        "feature": "dti",
+        "fraction": 1.0,
+        "mode": "absolute",
+        "shift": 8.0
+      }
+    }
+  ],
+  "rows_read": 18178,
+  "rows_selected": 3635,
+  "schema_version": "1.0",
+  "seed": 20260926,
+  "selected_time_max": "2018-10-01T00:00:00+00:00",
+  "selected_time_min": "2018-01-01T00:00:00+00:00",
+  "source": "D:\\Projects\\Dirft loan\\data\\processed\\feature_store\\unscaled",
+  "source_file_count": 20,
+  "source_files_sha256": "09b8b97620ab8671976b1eec51d5465f64688e2de417f2b12b46ebe62d80a7b1",
+  "target_column": "target",
+  "time_column": "issue_d",
+  "window": {
+    "end": "2018-12-31T23:59:59+00:00",
+    "include_end": true,
+    "include_start": true,
+    "start": "2018-01-01T00:00:00+00:00"
+  }
+}
