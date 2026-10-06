@@ -79,7 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         database.require_current_migrations()
         replayed = _rehydrate_drift(
             database,
-            drift_service,
+            app.state.drift_service,
             limit=resolved_settings.drift_rehydrate_limit,
         )
         LOGGER.info(

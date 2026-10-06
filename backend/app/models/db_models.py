@@ -41,11 +41,14 @@ class Base(DeclarativeBase):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("username", name="uq_users_username"),
+    )
 
     id: Mapped[str] = mapped_column(
         UUID_TYPE, primary_key=True, server_default=text("gen_random_uuid()")
     )
-    username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    username: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     role_id: Mapped[str] = mapped_column(
         UUID_TYPE,
@@ -195,6 +198,10 @@ class ExplanationExperimentAssignment(Base):
             "variant IN ('score_only', 'explanation_shown')",
             name="valid_variant",
         ),
+        UniqueConstraint(
+            "officer_id",
+            name="uq_explanation_experiment_assignments_officer_id",
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -204,7 +211,6 @@ class ExplanationExperimentAssignment(Base):
         UUID_TYPE,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
         index=True,
     )
     variant: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
@@ -281,6 +287,7 @@ class RetrainingTicket(Base):
             "status IN ('open', 'approved', 'rejected')",
             name="valid_status",
         ),
+        Index("ix_retraining_tickets_created_at", "created_at"),
     )
 
     id: Mapped[str] = mapped_column(
